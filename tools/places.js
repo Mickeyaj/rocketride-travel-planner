@@ -4,7 +4,6 @@ export async function getPlacesData(city) {
     try {
         // Nominatim requires a descriptive User-Agent header to comply with their usage policy.
         const url = "https://nominatim.openstreetmap.org/search";
-        
         const response = await axios.get(url, {
             params: {
                 q: `${city} tourist`, // Appending 'tourist' surfaces famous sights, landmarks, and attractions
@@ -13,7 +12,7 @@ export async function getPlacesData(city) {
                 limit: 15,            // Returns a raw list of up to 15 records for the MCP agent to chew through
             },
             headers: {
-                "User-Agent": "MCPAgentLocationTool/1.0 (contact@yourdomain.com)" 
+                "User-Agent": "MCPAgentLocationTool/1.0 (contact@yourdomain.com)"
             }
         });
 
