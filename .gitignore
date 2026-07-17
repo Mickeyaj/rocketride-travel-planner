@@ -1,1 +1,3 @@
 .rocketride/
+node_modules/
+.env
