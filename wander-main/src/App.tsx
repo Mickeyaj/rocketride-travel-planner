@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import './App.css'
+import { fetchPlaces, fetchWeather } from './api'
+import type { PlaceData, WeatherData } from './api'
 
 type IconName =
   | 'arrow-left' | 'arrow-up' | 'calendar' | 'car' | 'chevron-right'
@@ -47,56 +49,53 @@ const researchSteps = [
   { icon: 'sparkles' as const, text: 'Shaping your personalized itinerary' },
 ]
 
-const recommendations = [
-  {
-    time: '9:00 AM',
-    title: 'Slow morning at The London Plane',
-    detail:
-      'Start indoors with a seasonal breakfast in Pioneer Square. The bright dining room keeps this pick weather-proof.',
-    tag: 'Great for rain',
-    icon: 'coffee' as const,
+const CITY = 'Seattle'
+
+const PLACE_TIME_SLOTS = ['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM', '5:00 PM', '7:00 PM']
+
+const PLACE_ICONS: Partial<Record<string, IconName>> = {
+  museum: 'sparkles',
+  gallery: 'sparkles',
+  artwork: 'sparkles',
+  viewpoint: 'compass',
+  attraction: 'compass',
+  monument: 'compass',
+  castle: 'compass',
+  park: 'compass',
+  cafe: 'coffee',
+  restaurant: 'utensils',
+  fast_food: 'utensils',
+}
+
+function iconForPlace(place: PlaceData): IconName {
+  return PLACE_ICONS[place.type] ?? 'map-pin'
+}
+
+function labelForPlace(place: PlaceData): string {
+  return place.type
+    ? place.type.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+    : 'Point of Interest'
+}
+
+function titleForPlace(place: PlaceData): string {
+  return place.name?.trim() || place.display_name.split(',')[0]
+}
+
+function buildItinerary(places: PlaceData[]) {
+  return places.slice(0, PLACE_TIME_SLOTS.length).map((place, index) => ({
+    time: PLACE_TIME_SLOTS[index],
+    title: titleForPlace(place),
+    detail: `A notable ${labelForPlace(place).toLowerCase()} in ${CITY}, popular among visitors exploring the area.`,
+    tag: labelForPlace(place),
+    icon: iconForPlace(place),
     citations: [
-      { label: 'The London Plane', href: 'https://www.thelondonplaneseattle.com/' },
-      { label: 'Visit Seattle', href: 'https://visitseattle.org/' },
+      {
+        label: 'View on OpenStreetMap',
+        href: `https://www.openstreetmap.org/${place.osm_type}/${place.osm_id}`,
+      },
     ],
-  },
-  {
-    time: '11:00 AM',
-    title: 'Explore the Museum of Pop Culture',
-    detail:
-      'A fully indoor stop selected for your music and design interests, with enough to fill the wettest part of the day.',
-    tag: '92% match',
-    icon: 'sparkles' as const,
-    citations: [
-      { label: 'MoPOP official', href: 'https://www.mopop.org/' },
-      { label: 'Seattle Center', href: 'https://www.seattlecenter.com/' },
-    ],
-  },
-  {
-    time: '2:30 PM',
-    title: 'Take the underground tour',
-    detail:
-      'See the hidden storefronts beneath Pioneer Square. Most of the route is covered, and current tours run all afternoon.',
-    tag: 'Locally loved',
-    icon: 'compass' as const,
-    citations: [
-      { label: 'Underground Tour', href: 'https://www.undergroundtour.com/' },
-      { label: 'Pioneer Square', href: 'https://pioneersquare.org/' },
-    ],
-  },
-  {
-    time: '6:30 PM',
-    title: 'Dinner at The Walrus and the Carpenter',
-    detail:
-      'A cozy oyster bar whose indoor counter seating makes more sense than an outdoor-first restaurant on a rainy evening.',
-    tag: 'Food pick',
-    icon: 'utensils' as const,
-    citations: [
-      { label: 'The Walrus and the Carpenter', href: 'https://www.thewalrusbar.com/' },
-      { label: 'Seattle weather', href: 'https://www.weather.gov/sew/' },
-    ],
-  },
-]
+  }))
+}
 
 function getDefaultDate() {
   const nextWeekend = new Date()
@@ -215,6 +214,9 @@ function App() {
   const [showResults, setShowResults] = useState(false)
   const [tripDate, setTripDate] = useState(getDefaultDate)
   const [duration, setDuration] = useState(2)
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [places, setPlaces] = useState<PlaceData[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (screen !== 'landing' || input) return
@@ -243,15 +245,15 @@ function App() {
 
   useEffect(() => {
     if (screen !== 'chat' || showResults) return
-    const timer = window.setTimeout(() => {
-      if (statusIndex < researchSteps.length - 1) {
-        setStatusIndex((current) => current + 1)
-      } else {
-        setShowResults(true)
-      }
-    }, 850)
+    if (statusIndex >= researchSteps.length - 1) return
+    const timer = window.setTimeout(() => setStatusIndex((current) => current + 1), 850)
     return () => window.clearTimeout(timer)
   }, [screen, showResults, statusIndex])
+
+  useEffect(() => {
+    if (screen !== 'chat' || showResults) return
+    if ((weather && places) || loadError) setShowResults(true)
+  }, [screen, showResults, weather, places, loadError])
 
   const startTrip = (event: FormEvent) => {
     event.preventDefault()
@@ -260,8 +262,20 @@ function App() {
     setInput('')
     setStatusIndex(0)
     setShowResults(false)
+    setWeather(null)
+    setPlaces(null)
+    setLoadError(null)
     setScreen('chat')
     window.scrollTo({ top: 0, behavior: 'smooth' })
+
+    Promise.all([fetchWeather(CITY), fetchPlaces(CITY)])
+      .then(([weatherResult, placesResult]) => {
+        setWeather(weatherResult)
+        setPlaces(placesResult)
+      })
+      .catch((error: Error) => {
+        setLoadError(error.message)
+      })
   }
 
   if (screen === 'chat') {
@@ -313,21 +327,28 @@ function App() {
                     </div>
                   </div>
                 </div>
+              ) : loadError ? (
+                <div className="results">
+                  <div className="result-intro">
+                    <h1>Couldn't load your {CITY} trip.</h1>
+                    <p>{loadError}</p>
+                  </div>
+                </div>
               ) : (
                 <div className="results">
                   <div className="result-intro">
                     <div className="weather-pill">
-                      <Icon name="cloud-rain" size={16} /> {formattedDate} · 52°F · Rain likely
+                      <Icon name="cloud-rain" size={16} />{' '}
+                      {formattedDate} · {weather ? `${Math.round(weather.temperature)}°F · ${weather.weather}` : '—'}
                     </div>
-                    <h1>Your Seattle {duration === 1 ? 'day' : 'trip'}, made around you.</h1>
+                    <h1>Your {CITY} {duration === 1 ? 'day' : 'trip'}, made around you.</h1>
                     <p>
-                      I planned for rain and prioritized warm, indoor places—without losing
-                      the character of the city.
+                      I planned around today's weather in {CITY} to keep your day comfortable.
                     </p>
                   </div>
 
                   <div className="timeline">
-                    {recommendations.map((item) => (
+                    {buildItinerary(places ?? []).map((item) => (
                         <article className="recommendation" key={item.title}>
                           <div className="time">{item.time}</div>
                           <div className="timeline-dot"><Icon name={item.icon} size={17} /></div>

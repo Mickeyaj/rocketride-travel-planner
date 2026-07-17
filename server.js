@@ -71,6 +71,38 @@ server.tool(
   }
 );
 
+// Plain REST endpoints for the Wander frontend (kept separate from the MCP /mcp endpoint,
+// which speaks the MCP protocol for agent/pipeline clients).
+app.get("/api/weather", async (req, res) => {
+  const city = req.query.city;
+
+  if (!city) {
+    return res.status(400).json({ error: "city query parameter is required" });
+  }
+
+  try {
+    const weather = await getWeatherData(city);
+    res.json(weather);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.get("/api/places", async (req, res) => {
+  const city = req.query.city;
+
+  if (!city) {
+    return res.status(400).json({ error: "city query parameter is required" });
+  }
+
+  try {
+    const places = await getPlacesData(city);
+    res.json(places);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // Store transports by session ID
 const transports = new Map();
 

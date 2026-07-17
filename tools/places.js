@@ -6,7 +6,7 @@ export async function getPlacesData(city) {
         const url = "https://nominatim.openstreetmap.org/search";
         const response = await axios.get(url, {
             params: {
-                q: `${city} tourist`, // Appending 'tourist' surfaces famous sights, landmarks, and attractions
+                q: `attraction in ${city}`, // This phrasing matches Nominatim's parser far more reliably than "${city} tourist", which returns zero results for many cities (e.g. Seattle)
                 format: "json",
                 addressdetails: 1,
                 limit: 15,            // Returns a raw list of up to 15 records for the MCP agent to chew through
