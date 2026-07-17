@@ -42,14 +42,31 @@ const samplePrompts = [
   'Find scenic hikes with a great lunch nearby',
 ]
 
-const researchSteps = [
-  { icon: 'search' as const, text: 'Finding experiences that match your interests' },
-  { icon: 'cloud-rain' as const, text: 'Checking Seattle weather for your dates' },
-  { icon: 'calendar' as const, text: 'Verifying hours, events, and availability' },
-  { icon: 'sparkles' as const, text: 'Shaping your personalized itinerary' },
+const RESEARCH_STEP_COUNT = 4
+
+function getResearchSteps(city: string) {
+  return [
+    { icon: 'search' as const, text: 'Finding experiences that match your interests' },
+    { icon: 'cloud-rain' as const, text: `Checking ${city} weather for your dates` },
+    { icon: 'calendar' as const, text: 'Verifying hours, events, and availability' },
+    { icon: 'sparkles' as const, text: 'Shaping your personalized itinerary' },
+  ]
+}
+
+const CATEGORY_KEYWORDS: [string[], string][] = [
+  [['restaurant', 'food', 'eat', 'dinner', 'lunch', 'breakfast', 'brunch'], 'restaurant'],
+  [['coffee', 'cafe'], 'cafe'],
+  [['hike', 'hiking', 'trail', 'outdoor', 'nature'], 'park'],
+  [['museum', 'art', 'gallery', 'culture'], 'museum'],
 ]
 
-const CITY = 'Seattle'
+function categoryForQuery(text: string): string {
+  const lower = text.toLowerCase()
+  const match = CATEGORY_KEYWORDS.find(([keywords]) =>
+    keywords.some((keyword) => new RegExp(`\\b${keyword}\\b`).test(lower)),
+  )
+  return match ? match[1] : 'attraction'
+}
 
 const PLACE_TIME_SLOTS = ['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM', '5:00 PM', '7:00 PM']
 
@@ -81,11 +98,11 @@ function titleForPlace(place: PlaceData): string {
   return place.name?.trim() || place.display_name.split(',')[0]
 }
 
-function buildItinerary(places: PlaceData[]) {
+function buildItinerary(places: PlaceData[], city: string) {
   return places.slice(0, PLACE_TIME_SLOTS.length).map((place, index) => ({
     time: PLACE_TIME_SLOTS[index],
     title: titleForPlace(place),
-    detail: `A notable ${labelForPlace(place).toLowerCase()} in ${CITY}, popular among visitors exploring the area.`,
+    detail: `A notable ${labelForPlace(place).toLowerCase()} in ${city}, popular among visitors exploring the area.`,
     tag: labelForPlace(place),
     icon: iconForPlace(place),
     citations: [
@@ -203,6 +220,51 @@ function PromptBox({
   )
 }
 
+function LocationField({ city, onChange }: { city: string; onChange: (value: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(city)
+
+  const commit = () => {
+    const trimmed = draft.trim()
+    onChange(trimmed || city)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <form
+        className="location-button"
+        onSubmit={(event) => {
+          event.preventDefault()
+          commit()
+        }}
+      >
+        <Icon name="map-pin" size={15} />
+        <input
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          aria-label="Destination city"
+        />
+      </form>
+    )
+  }
+
+  return (
+    <button
+      className="location-button"
+      type="button"
+      onClick={() => {
+        setDraft(city)
+        setEditing(true)
+      }}
+    >
+      <Icon name="map-pin" size={15} /> {city}
+    </button>
+  )
+}
+
 function App() {
   const [screen, setScreen] = useState<'landing' | 'chat'>('landing')
   const [input, setInput] = useState('')
@@ -217,6 +279,9 @@ function App() {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [places, setPlaces] = useState<PlaceData[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [city, setCity] = useState('Seattle')
+
+  const researchSteps = getResearchSteps(city)
 
   useEffect(() => {
     if (screen !== 'landing' || input) return
@@ -245,7 +310,7 @@ function App() {
 
   useEffect(() => {
     if (screen !== 'chat' || showResults) return
-    if (statusIndex >= researchSteps.length - 1) return
+    if (statusIndex >= RESEARCH_STEP_COUNT - 1) return
     const timer = window.setTimeout(() => setStatusIndex((current) => current + 1), 850)
     return () => window.clearTimeout(timer)
   }, [screen, showResults, statusIndex])
@@ -257,8 +322,9 @@ function App() {
 
   const startTrip = (event: FormEvent) => {
     event.preventDefault()
-    if (!input.trim()) return
-    setQuery(input.trim())
+    const trimmedInput = input.trim()
+    if (!trimmedInput) return
+    setQuery(trimmedInput)
     setInput('')
     setStatusIndex(0)
     setShowResults(false)
@@ -268,7 +334,7 @@ function App() {
     setScreen('chat')
     window.scrollTo({ top: 0, behavior: 'smooth' })
 
-    Promise.all([fetchWeather(CITY), fetchPlaces(CITY)])
+    Promise.all([fetchWeather(city), fetchPlaces(city, categoryForQuery(trimmedInput))])
       .then(([weatherResult, placesResult]) => {
         setWeather(weatherResult)
         setPlaces(placesResult)
@@ -330,7 +396,7 @@ function App() {
               ) : loadError ? (
                 <div className="results">
                   <div className="result-intro">
-                    <h1>Couldn't load your {CITY} trip.</h1>
+                    <h1>Couldn't load your {city} trip.</h1>
                     <p>{loadError}</p>
                   </div>
                 </div>
@@ -341,14 +407,14 @@ function App() {
                       <Icon name="cloud-rain" size={16} />{' '}
                       {formattedDate} · {weather ? `${Math.round(weather.temperature)}°F · ${weather.weather}` : '—'}
                     </div>
-                    <h1>Your {CITY} {duration === 1 ? 'day' : 'trip'}, made around you.</h1>
+                    <h1>Your {city} {duration === 1 ? 'day' : 'trip'}, made around you.</h1>
                     <p>
-                      I planned around today's weather in {CITY} to keep your day comfortable.
+                      I planned around today's weather in {city} to keep your day comfortable.
                     </p>
                   </div>
 
                   <div className="timeline">
-                    {buildItinerary(places ?? []).map((item) => (
+                    {buildItinerary(places ?? [], city).map((item) => (
                         <article className="recommendation" key={item.title}>
                           <div className="time">{item.time}</div>
                           <div className="timeline-dot"><Icon name={item.icon} size={17} /></div>
@@ -409,9 +475,7 @@ function App() {
           <span className="brand-symbol"><Icon name="plane" size={19} /></span>
           Wander
         </div>
-        <button className="location-button" type="button">
-          <Icon name="map-pin" size={15} /> Seattle, WA
-        </button>
+        <LocationField city={city} onChange={setCity} />
       </header>
 
       <section className="hero-section">

@@ -36,6 +36,6 @@ export function fetchWeather(city: string): Promise<WeatherData> {
   return apiGet<WeatherData>('/api/weather', { city })
 }
 
-export function fetchPlaces(city: string): Promise<PlaceData[]> {
-  return apiGet<PlaceData[]>('/api/places', { city })
+export function fetchPlaces(city: string, category?: string): Promise<PlaceData[]> {
+  return apiGet<PlaceData[]>('/api/places', category ? { city, category } : { city })
 }

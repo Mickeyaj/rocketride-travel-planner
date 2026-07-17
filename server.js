@@ -53,12 +53,13 @@ server.tool(
 
 server.tool(
   "getPlaces",
-  "Get famous places for a given city.",
+  "Get places of a given category (e.g. attraction, restaurant, cafe, museum, park) for a given city.",
   {
     city: z.string(),
+    category: z.string().optional(),
   },
-  async ({ city }) => {
-    const places = await getPlacesData(city);
+  async ({ city, category }) => {
+    const places = await getPlacesData(city, category);
 
     return {
       content: [
@@ -96,7 +97,7 @@ app.get("/api/places", async (req, res) => {
   }
 
   try {
-    const places = await getPlacesData(city);
+    const places = await getPlacesData(city, req.query.category);
     res.json(places);
   } catch (err) {
     res.status(502).json({ error: err.message });
