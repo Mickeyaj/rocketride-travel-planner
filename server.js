@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import crypto from "node:crypto";
+import cors from "cors";
 import express from "express";
 import { z } from "zod";
 
@@ -8,14 +10,27 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 import { getWeatherData } from "./tools/weather.js";
+import { getPlacesData } from "./tools/places.js";
 
-// Create the MCP server
+const app = express();
+
+app.use(cors({
+  origin: "*",
+  exposedHeaders: ["mcp-session-id"],
+  allowedHeaders: [
+    "Content-Type",
+    "Accept",
+    "mcp-session-id",
+  ],
+}));
+
+app.use(express.json());
+
 const server = new McpServer({
   name: "rocketride-travel",
   version: "1.0.0",
 });
 
-// Register weather tool
 server.tool(
   "getWeather",
   "Get the current weather for a given city.",
@@ -36,21 +51,55 @@ server.tool(
   }
 );
 
-const app = express();
-app.use(express.json());
+server.tool(
+  "getPlaces",
+  "Get famous places for a given city.",
+  {
+    city: z.string(),
+  },
+  async ({ city }) => {
+    const places = await getPlacesData(city);
 
-// Create a new transport for each client session
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(places, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+// Store transports by session ID
+const transports = new Map();
+
 app.all("/mcp", async (req, res) => {
   try {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => crypto.randomUUID(),
-    });
+    const sessionId = req.headers["mcp-session-id"];
 
-    res.on("close", () => {
-      transport.close();
-    });
+    let transport;
 
-    await server.connect(transport);
+    if (sessionId && transports.has(sessionId)) {
+      transport = transports.get(sessionId);
+    } else {
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => crypto.randomUUID(),
+
+        onsessioninitialized: (id) => {
+          transports.set(id, transport);
+        },
+      });
+
+      transport.onclose = () => {
+        if (transport.sessionId) {
+          transports.delete(transport.sessionId);
+        }
+      };
+
+      await server.connect(transport);
+    }
+
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
     console.error(err);
