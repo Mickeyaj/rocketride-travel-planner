@@ -1,0 +1,436 @@
+import { useEffect, useState } from 'react'
+import type { FormEvent, ReactNode } from 'react'
+import './App.css'
+
+type IconName =
+  | 'arrow-left' | 'arrow-up' | 'calendar' | 'car' | 'chevron-right'
+  | 'cloud-rain' | 'coffee' | 'compass' | 'external' | 'map-pin'
+  | 'minus' | 'plane' | 'plus' | 'search' | 'sparkles' | 'utensils'
+
+function Icon({ name, size = 18, className }: { name: IconName; size?: number; className?: string }) {
+  const paths: Record<IconName, ReactNode> = {
+    'arrow-left': <><path d="m15 18-6-6 6-6" /><path d="M9 12h10" /></>,
+    'arrow-up': <><path d="m6 11 6-6 6 6" /><path d="M12 5v14" /></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
+    car: <><path d="m5 17-2-2 2-6h14l2 6-2 2H5Z" /><path d="m7 9 2-4h6l2 4M7 17v2M17 17v2" /><circle cx="7.5" cy="14" r=".5" /><circle cx="16.5" cy="14" r=".5" /></>,
+    'chevron-right': <path d="m9 18 6-6-6-6" />,
+    'cloud-rain': <><path d="M7 17h10a4 4 0 0 0 .6-8 6 6 0 0 0-11.4 2A3 3 0 0 0 7 17Z" /><path d="m8 20-1 2M12 20l-1 2M16 20l-1 2" /></>,
+    coffee: <><path d="M4 8h14v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z" /><path d="M18 10h1a3 3 0 0 1 0 6h-1M8 4v1M12 3v2M16 4v1" /></>,
+    compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" /></>,
+    external: <><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6" /></>,
+    'map-pin': <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
+    minus: <path d="M5 12h14" />,
+    plane: <path d="M22 16v-2l-8-5V3.5a2 2 0 0 0-4 0V9l-8 5v2l8-2.5V19l-2 1.5V22l4-1 4 1v-1.5L14 19v-5.5l8 2.5Z" />,
+    plus: <path d="M12 5v14M5 12h14" />,
+    search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
+    sparkles: <><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3Z" /><path d="m18.5 14 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z" /></>,
+    utensils: <><path d="M7 3v7M4 3v4a3 3 0 0 0 6 0V3M7 10v11M17 3v18M17 3c-3 2-4 6-4 9h4" /></>,
+  }
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[name]}
+    </svg>
+  )
+}
+
+const samplePrompts = [
+  'Plan a rainy weekend in Seattle for a food lover',
+  'What car events are happening in Seattle next month?',
+  'Build me a finals weekend itinerary in Seattle',
+  'Find scenic hikes with a great lunch nearby',
+]
+
+const researchSteps = [
+  { icon: 'search' as const, text: 'Finding experiences that match your interests' },
+  { icon: 'cloud-rain' as const, text: 'Checking Seattle weather for your dates' },
+  { icon: 'calendar' as const, text: 'Verifying hours, events, and availability' },
+  { icon: 'sparkles' as const, text: 'Shaping your personalized itinerary' },
+]
+
+const recommendations = [
+  {
+    time: '9:00 AM',
+    title: 'Slow morning at The London Plane',
+    detail:
+      'Start indoors with a seasonal breakfast in Pioneer Square. The bright dining room keeps this pick weather-proof.',
+    tag: 'Great for rain',
+    icon: 'coffee' as const,
+    citations: [
+      { label: 'The London Plane', href: 'https://www.thelondonplaneseattle.com/' },
+      { label: 'Visit Seattle', href: 'https://visitseattle.org/' },
+    ],
+  },
+  {
+    time: '11:00 AM',
+    title: 'Explore the Museum of Pop Culture',
+    detail:
+      'A fully indoor stop selected for your music and design interests, with enough to fill the wettest part of the day.',
+    tag: '92% match',
+    icon: 'sparkles' as const,
+    citations: [
+      { label: 'MoPOP official', href: 'https://www.mopop.org/' },
+      { label: 'Seattle Center', href: 'https://www.seattlecenter.com/' },
+    ],
+  },
+  {
+    time: '2:30 PM',
+    title: 'Take the underground tour',
+    detail:
+      'See the hidden storefronts beneath Pioneer Square. Most of the route is covered, and current tours run all afternoon.',
+    tag: 'Locally loved',
+    icon: 'compass' as const,
+    citations: [
+      { label: 'Underground Tour', href: 'https://www.undergroundtour.com/' },
+      { label: 'Pioneer Square', href: 'https://pioneersquare.org/' },
+    ],
+  },
+  {
+    time: '6:30 PM',
+    title: 'Dinner at The Walrus and the Carpenter',
+    detail:
+      'A cozy oyster bar whose indoor counter seating makes more sense than an outdoor-first restaurant on a rainy evening.',
+    tag: 'Food pick',
+    icon: 'utensils' as const,
+    citations: [
+      { label: 'The Walrus and the Carpenter', href: 'https://www.thewalrusbar.com/' },
+      { label: 'Seattle weather', href: 'https://www.weather.gov/sew/' },
+    ],
+  },
+]
+
+function getDefaultDate() {
+  const nextWeekend = new Date()
+  nextWeekend.setDate(nextWeekend.getDate() + 2)
+  return nextWeekend.toISOString().slice(0, 10)
+}
+
+function TripControls({
+  date,
+  duration,
+  onDateChange,
+  onDurationChange,
+}: {
+  date: string
+  duration: number
+  onDateChange: (value: string) => void
+  onDurationChange: (value: number) => void
+}) {
+  return (
+    <div className="trip-controls" aria-label="Trip timing">
+      <label className="date-control">
+        <Icon name="calendar" size={16} />
+        <span>
+          <small>Starting</small>
+          <input
+            type="date"
+            value={date}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(event) => onDateChange(event.target.value)}
+          />
+        </span>
+      </label>
+      <div className="control-divider" />
+      <div className="duration-control">
+        <span>
+          <small>Trip length</small>
+          <strong>{duration} {duration === 1 ? 'day' : 'days'}</strong>
+        </span>
+        <div className="duration-buttons">
+          <button
+            type="button"
+            aria-label="Decrease trip duration"
+            disabled={duration === 1}
+            onClick={() => onDurationChange(Math.max(1, duration - 1))}
+          >
+            <Icon name="minus" size={14} />
+          </button>
+          <button
+            type="button"
+            aria-label="Increase trip duration"
+            disabled={duration === 7}
+            onClick={() => onDurationChange(Math.min(7, duration + 1))}
+          >
+            <Icon name="plus" size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PromptBox({
+  value,
+  onChange,
+  onSubmit,
+  animatedPrompt,
+  compact = false,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onSubmit: (event: FormEvent) => void
+  animatedPrompt?: string
+  compact?: boolean
+}) {
+  const active = value.trim().length > 0
+
+  return (
+    <form className={`prompt-box ${compact ? 'compact' : ''}`} onSubmit={onSubmit}>
+      <div className="prompt-mark" aria-hidden="true">
+        <Icon name="sparkles" size={17} />
+      </div>
+      <div className="input-wrap">
+        {!value && animatedPrompt && (
+          <span className="typed-placeholder">
+            {animatedPrompt}
+            <span className="cursor" />
+          </span>
+        )}
+        <input
+          aria-label="Describe your trip"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={animatedPrompt ? '' : 'Ask Wander to refine your trip…'}
+        />
+      </div>
+      <button
+        className={`send-button ${active ? 'active' : ''}`}
+        type="submit"
+        disabled={!active}
+        aria-label="Plan my trip"
+      >
+        <Icon name="arrow-up" size={19} />
+      </button>
+    </form>
+  )
+}
+
+function App() {
+  const [screen, setScreen] = useState<'landing' | 'chat'>('landing')
+  const [input, setInput] = useState('')
+  const [query, setQuery] = useState('')
+  const [promptIndex, setPromptIndex] = useState(0)
+  const [typed, setTyped] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [statusIndex, setStatusIndex] = useState(0)
+  const [showResults, setShowResults] = useState(false)
+  const [tripDate, setTripDate] = useState(getDefaultDate)
+  const [duration, setDuration] = useState(2)
+
+  useEffect(() => {
+    if (screen !== 'landing' || input) return
+    const prompt = samplePrompts[promptIndex]
+    const atEnd = typed === prompt
+    const atStart = typed.length === 0
+    const delay = atEnd && !deleting ? 1450 : deleting ? 24 : 48
+
+    const timer = window.setTimeout(() => {
+      if (atEnd && !deleting) {
+        setDeleting(true)
+      } else if (deleting && atStart) {
+        setDeleting(false)
+        setPromptIndex((current) => (current + 1) % samplePrompts.length)
+      } else {
+        setTyped(
+          deleting
+            ? prompt.slice(0, Math.max(typed.length - 1, 0))
+            : prompt.slice(0, typed.length + 1),
+        )
+      }
+    }, delay)
+
+    return () => window.clearTimeout(timer)
+  }, [deleting, input, promptIndex, screen, typed])
+
+  useEffect(() => {
+    if (screen !== 'chat' || showResults) return
+    const timer = window.setTimeout(() => {
+      if (statusIndex < researchSteps.length - 1) {
+        setStatusIndex((current) => current + 1)
+      } else {
+        setShowResults(true)
+      }
+    }, 850)
+    return () => window.clearTimeout(timer)
+  }, [screen, showResults, statusIndex])
+
+  const startTrip = (event: FormEvent) => {
+    event.preventDefault()
+    if (!input.trim()) return
+    setQuery(input.trim())
+    setInput('')
+    setStatusIndex(0)
+    setShowResults(false)
+    setScreen('chat')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  if (screen === 'chat') {
+    const formattedDate = new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(`${tripDate}T12:00:00Z`))
+
+    return (
+      <main className="chat-page">
+        <header className="topbar">
+          <button className="brand" onClick={() => setScreen('landing')} type="button">
+            <span className="brand-symbol"><Icon name="plane" size={19} /></span>
+            Wander
+          </button>
+          <button className="new-trip" onClick={() => setScreen('landing')} type="button">
+            <Icon name="plus" size={16} /> New trip
+          </button>
+        </header>
+
+        <div className="chat-shell">
+          <button className="back-link" onClick={() => setScreen('landing')} type="button">
+            <Icon name="arrow-left" size={15} /> Back to home
+          </button>
+
+          <section className="conversation">
+            <div className="user-message">
+              <span>{query}</span>
+              <small><Icon name="calendar" size={12} /> {formattedDate} · {duration} {duration === 1 ? 'day' : 'days'}</small>
+            </div>
+
+            <div className="assistant-block">
+              {!showResults ? (
+                <div className="thinking">
+                  <div className="thinking-mark" aria-hidden="true">
+                    <Icon name="sparkles" size={22} />
+                  </div>
+                  <div className="thinking-copy">
+                    <p key={statusIndex}>{researchSteps[statusIndex].text}</p>
+                    <div className="thinking-meta">
+                      <span className="thinking-dots" aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <small>Researching live sources</small>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="results">
+                  <div className="result-intro">
+                    <div className="weather-pill">
+                      <Icon name="cloud-rain" size={16} /> {formattedDate} · 52°F · Rain likely
+                    </div>
+                    <h1>Your Seattle {duration === 1 ? 'day' : 'trip'}, made around you.</h1>
+                    <p>
+                      I planned for rain and prioritized warm, indoor places—without losing
+                      the character of the city.
+                    </p>
+                  </div>
+
+                  <div className="timeline">
+                    {recommendations.map((item) => (
+                        <article className="recommendation" key={item.title}>
+                          <div className="time">{item.time}</div>
+                          <div className="timeline-dot"><Icon name={item.icon} size={17} /></div>
+                          <div className="recommendation-card">
+                            <div className="card-heading">
+                              <h2>{item.title}</h2>
+                              <span>{item.tag}</span>
+                            </div>
+                            <p>{item.detail}</p>
+                            <div className="citations-panel">
+                              <div className="citations-label">
+                                <Icon name="external" size={12} />
+                                Verified sources
+                              </div>
+                              <div className="citation-links">
+                                {item.citations.map((citation, index) => (
+                                  <a href={citation.href} target="_blank" rel="noreferrer" key={citation.href}>
+                                    <span>{index + 1}</span>
+                                    {citation.label}
+                                    <Icon name="external" size={11} />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <div className="chat-composer">
+            <TripControls
+              date={tripDate}
+              duration={duration}
+              onDateChange={setTripDate}
+              onDurationChange={setDuration}
+            />
+            <PromptBox
+              value={input}
+              onChange={setInput}
+              onSubmit={startTrip}
+              compact
+            />
+            <span>Wander can make mistakes. Check linked sources before you go.</span>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="landing-page">
+      <header className="landing-nav">
+        <div className="brand">
+          <span className="brand-symbol"><Icon name="plane" size={19} /></span>
+          Wander
+        </div>
+        <button className="location-button" type="button">
+          <Icon name="map-pin" size={15} /> Seattle, WA
+        </button>
+      </header>
+
+      <section className="hero-section">
+        <div className="atmosphere" />
+        <div className="globe" aria-hidden="true"><div /></div>
+        <div className="hero-content">
+          <h1>The city, <em>made for you.</em></h1>
+          <PromptBox
+            value={input}
+            onChange={setInput}
+            onSubmit={startTrip}
+            animatedPrompt={typed}
+          />
+          <TripControls
+            date={tripDate}
+            duration={duration}
+            onDateChange={setTripDate}
+            onDurationChange={setDuration}
+          />
+          <p className="prompt-hint">Share your dates, interests, and destination</p>
+        </div>
+      </section>
+
+      <section className="continue-section">
+        <div className="section-title">
+          <div>
+            <span>Your journeys</span>
+            <h2>Continue where you left off</h2>
+          </div>
+          <button type="button">View all · 0 <Icon name="chevron-right" size={15} /></button>
+        </div>
+        <div className="journey-grid">
+          <button className="new-journey-card" onClick={() => document.querySelector('input')?.focus()} type="button">
+            <span><Icon name="plus" size={21} /></span>
+            <span className="sr-only">Start a new journey</span>
+          </button>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+export default App

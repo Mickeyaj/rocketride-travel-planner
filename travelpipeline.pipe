@@ -1,0 +1,200 @@
+{
+  "components": [
+    {
+      "id": "chat_1",
+      "provider": "chat",
+      "name": "Chat",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "chat",
+        "name": "Chat"
+      },
+      "ui": {
+        "position": {
+          "x": 820,
+          "y": 480
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "prompt_1",
+      "provider": "prompt",
+      "name": "Prompt",
+      "config": {
+        "instructions": [],
+        "name": "Prompt"
+      },
+      "ui": {
+        "position": {
+          "x": 1060,
+          "y": 390
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "chat_1"
+        }
+      ]
+    },
+    {
+      "id": "agent_crewai_1",
+      "provider": "agent_crewai",
+      "name": "Travel Agent",
+      "config": {
+        "advanced_mode": false,
+        "agent_description": "A travel assistant that helps the user with their travel plans based on preferences, budget, weather conditions, and locality",
+        "instructions": [
+          "You are a travel assistant to the user.\n\nYou will make a travel plan for the user to restaurants or tourist spots based on the following considerations: weather conditions, user preferences, location, and time and date.\n\nInvoke Weather MCP Client .\n\n"
+        ],
+        "name": "CrewAI Agent",
+        "parameters": {
+          "google": {}
+        }
+      },
+      "ui": {
+        "position": {
+          "x": 1270,
+          "y": 390
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "prompt_1"
+        }
+      ]
+    },
+    {
+      "id": "mcp_client_1",
+      "provider": "mcp_client",
+      "name": "Weather MCP Client",
+      "config": {
+        "serverName": "rocketride-travel",
+        "transport": "streamable-http",
+        "type": "mcp_client",
+        "http": {
+          "bearer": "",
+          "endpoint": "https://hear-bathroom-run-admit.trycloudflare.com/mcp",
+          "headers": {}
+        },
+        "name": "MCP Client",
+        "parameters": {
+          "google": {}
+        }
+      },
+      "ui": {
+        "position": {
+          "x": 1290,
+          "y": 590
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_crewai_1"
+        }
+      ]
+    },
+    {
+      "id": "mcp_client_2",
+      "provider": "mcp_client",
+      "name": "MCP Client",
+      "config": {
+        "serverName": "mcp",
+        "transport": "streamable-http",
+        "type": "mcp_client",
+        "name": "MCP Client"
+      },
+      "ui": {
+        "position": {
+          "x": 1450,
+          "y": 540
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_crewai_1"
+        }
+      ]
+    },
+    {
+      "id": "mcp_client_3",
+      "provider": "mcp_client",
+      "name": "Places MCP Client",
+      "config": {
+        "serverName": "rocketride-travel",
+        "transport": "streamable-http",
+        "type": "mcp_client",
+        "http": {
+          "bearer": "",
+          "endpoint": "https://hear-bathroom-run-admit.trycloudflare.com/mcp",
+          "headers": {}
+        },
+        "name": "MCP Client",
+        "parameters": {
+          "google": {}
+        }
+      },
+      "ui": {
+        "position": {
+          "x": 1180,
+          "y": 530
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_crewai_1"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers",
+        "name": "Return Answers"
+      },
+      "ui": {
+        "position": {
+          "x": 1510,
+          "y": 400
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "agent_crewai_1"
+        }
+      ]
+    }
+  ],
+  "project_id": "da4e8c0d-5655-40c1-8181-e27ef32f205a",
+  "version": 1,
+  "docRevision": 26,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ]
+}
