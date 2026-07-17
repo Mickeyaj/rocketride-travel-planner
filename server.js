@@ -9,7 +9,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-import { getWeatherData } from "./tools/weather.js";
+import { getWeatherData, getWeatherForecastData } from "./tools/weather.js";
 import { getPlacesData } from "./tools/places.js";
 
 const app = express();
@@ -52,6 +52,26 @@ server.tool(
 );
 
 server.tool(
+  "getWeatherForecast",
+  "Get a multi-day weather forecast (up to 5 days) for a given city.",
+  {
+    city: z.string(),
+  },
+  async ({ city }) => {
+    const forecast = await getWeatherForecastData(city);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(forecast, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
   "getPlaces",
   "Get places of a given category (e.g. attraction, restaurant, cafe, museum, park) for a given city.",
   {
@@ -84,6 +104,21 @@ app.get("/api/weather", async (req, res) => {
   try {
     const weather = await getWeatherData(city);
     res.json(weather);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.get("/api/forecast", async (req, res) => {
+  const city = req.query.city;
+
+  if (!city) {
+    return res.status(400).json({ error: "city query parameter is required" });
+  }
+
+  try {
+    const forecast = await getWeatherForecastData(city);
+    res.json(forecast);
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

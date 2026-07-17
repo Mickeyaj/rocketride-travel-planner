@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import './App.css'
-import { fetchPlaces, fetchWeather } from './api'
-import type { PlaceData, WeatherData } from './api'
+import { fetchForecast, fetchPlaces } from './api'
+import type { ForecastDay, PlaceData } from './api'
 
 type IconName =
   | 'arrow-left' | 'arrow-up' | 'calendar' | 'car' | 'chevron-right'
@@ -118,6 +118,25 @@ function getDefaultDate() {
   const nextWeekend = new Date()
   nextWeekend.setDate(nextWeekend.getDate() + 2)
   return nextWeekend.toISOString().slice(0, 10)
+}
+
+function tripDateList(startDate: string, days: number): string[] {
+  const dates: string[] = []
+  for (let offset = 0; offset < days; offset += 1) {
+    const date = new Date(`${startDate}T12:00:00Z`)
+    date.setUTCDate(date.getUTCDate() + offset)
+    dates.push(date.toISOString().slice(0, 10))
+  }
+  return dates
+}
+
+function formatShortDate(isoDate: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${isoDate}T12:00:00Z`))
 }
 
 function TripControls({
@@ -276,7 +295,7 @@ function App() {
   const [showResults, setShowResults] = useState(false)
   const [tripDate, setTripDate] = useState(getDefaultDate)
   const [duration, setDuration] = useState(2)
-  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [forecast, setForecast] = useState<ForecastDay[] | null>(null)
   const [places, setPlaces] = useState<PlaceData[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [city, setCity] = useState('Seattle')
@@ -317,8 +336,8 @@ function App() {
 
   useEffect(() => {
     if (screen !== 'chat' || showResults) return
-    if ((weather && places) || loadError) setShowResults(true)
-  }, [screen, showResults, weather, places, loadError])
+    if ((forecast && places) || loadError) setShowResults(true)
+  }, [screen, showResults, forecast, places, loadError])
 
   const startTrip = (event: FormEvent) => {
     event.preventDefault()
@@ -328,15 +347,15 @@ function App() {
     setInput('')
     setStatusIndex(0)
     setShowResults(false)
-    setWeather(null)
+    setForecast(null)
     setPlaces(null)
     setLoadError(null)
     setScreen('chat')
     window.scrollTo({ top: 0, behavior: 'smooth' })
 
-    Promise.all([fetchWeather(city), fetchPlaces(city, categoryForQuery(trimmedInput))])
-      .then(([weatherResult, placesResult]) => {
-        setWeather(weatherResult)
+    Promise.all([fetchForecast(city), fetchPlaces(city, categoryForQuery(trimmedInput))])
+      .then(([forecastResult, placesResult]) => {
+        setForecast(forecastResult)
         setPlaces(placesResult)
       })
       .catch((error: Error) => {
@@ -351,6 +370,9 @@ function App() {
       year: 'numeric',
       timeZone: 'UTC',
     }).format(new Date(`${tripDate}T12:00:00Z`))
+
+    const tripDays = tripDateList(tripDate, duration)
+    const forecastByDate = new Map((forecast ?? []).map((day) => [day.date, day]))
 
     return (
       <main className="chat-page">
@@ -403,13 +425,23 @@ function App() {
               ) : (
                 <div className="results">
                   <div className="result-intro">
-                    <div className="weather-pill">
-                      <Icon name="cloud-rain" size={16} />{' '}
-                      {formattedDate} · {weather ? `${Math.round(weather.temperature)}°F · ${weather.weather}` : '—'}
+                    <div className="weather-row">
+                      {tripDays.map((date) => {
+                        const day = forecastByDate.get(date)
+                        return (
+                          <div className="weather-pill" key={date}>
+                            <Icon name="cloud-rain" size={16} />{' '}
+                            {formatShortDate(date)} ·{' '}
+                            {day
+                              ? `${Math.round(day.tempMin)}–${Math.round(day.tempMax)}°F · ${day.weather}`
+                              : 'Forecast not available yet'}
+                          </div>
+                        )
+                      })}
                     </div>
                     <h1>Your {city} {duration === 1 ? 'day' : 'trip'}, made around you.</h1>
                     <p>
-                      I planned around today's weather in {city} to keep your day comfortable.
+                      I planned around the forecast for your {duration === 1 ? 'day' : `${duration}-day trip`} in {city}, starting {formattedDate}.
                     </p>
                   </div>
 

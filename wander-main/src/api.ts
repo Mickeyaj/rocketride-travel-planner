@@ -6,6 +6,13 @@ export type WeatherData = {
   weather: string
 }
 
+export type ForecastDay = {
+  date: string
+  tempMin: number
+  tempMax: number
+  weather: string
+}
+
 export type PlaceData = {
   place_id: number
   osm_type: string
@@ -34,6 +41,10 @@ async function apiGet<T>(path: string, params: Record<string, string>): Promise<
 
 export function fetchWeather(city: string): Promise<WeatherData> {
   return apiGet<WeatherData>('/api/weather', { city })
+}
+
+export function fetchForecast(city: string): Promise<ForecastDay[]> {
+  return apiGet<ForecastDay[]>('/api/forecast', { city })
 }
 
 export function fetchPlaces(city: string, category?: string): Promise<PlaceData[]> {
