@@ -5,7 +5,7 @@ import { fetchForecast, fetchPlaces } from './api'
 import type { ForecastDay, PlaceData } from './api'
 
 type IconName =
-  | 'arrow-left' | 'arrow-up' | 'calendar' | 'car' | 'chevron-right'
+  | 'arrow-left' | 'arrow-up' | 'calendar' | 'car' | 'chevron-right' | 'close'
   | 'cloud-rain' | 'coffee' | 'compass' | 'external' | 'map-pin'
   | 'minus' | 'plane' | 'plus' | 'search' | 'sparkles' | 'utensils'
 
@@ -16,6 +16,7 @@ function Icon({ name, size = 18, className }: { name: IconName; size?: number; c
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
     car: <><path d="m5 17-2-2 2-6h14l2 6-2 2H5Z" /><path d="m7 9 2-4h6l2 4M7 17v2M17 17v2" /><circle cx="7.5" cy="14" r=".5" /><circle cx="16.5" cy="14" r=".5" /></>,
     'chevron-right': <path d="m9 18 6-6-6-6" />,
+    close: <><path d="m6 6 12 12" /><path d="m18 6-12 12" /></>,
     'cloud-rain': <><path d="M7 17h10a4 4 0 0 0 .6-8 6 6 0 0 0-11.4 2A3 3 0 0 0 7 17Z" /><path d="m8 20-1 2M12 20l-1 2M16 20l-1 2" /></>,
     coffee: <><path d="M4 8h14v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z" /><path d="M18 10h1a3 3 0 0 1 0 6h-1M8 4v1M12 3v2M16 4v1" /></>,
     compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" /></>,
@@ -71,7 +72,9 @@ function categoryForQuery(text: string): string {
   return match ? match[1] : 'attraction'
 }
 
-const PLACE_TIME_SLOTS = ['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM', '5:00 PM', '7:00 PM']
+const MAX_RESULTS = 8
+const DEFAULT_TIME = '09:00'
+const TIMETABLE_STORAGE_KEY = 'wander-timetable'
 
 const PLACE_ICONS: Partial<Record<string, IconName>> = {
   museum: 'sparkles',
@@ -103,8 +106,8 @@ function titleForPlace(place: PlaceData): string {
 }
 
 function buildItinerary(places: PlaceData[], city: string) {
-  return places.slice(0, PLACE_TIME_SLOTS.length).map((place, index) => ({
-    time: PLACE_TIME_SLOTS[index],
+  return places.slice(0, MAX_RESULTS).map((place) => ({
+    id: `${place.osm_type}-${place.osm_id}`,
     title: titleForPlace(place),
     detail: `A notable ${labelForPlace(place).toLowerCase()} in ${city}, popular among visitors exploring the area.`,
     tag: labelForPlace(place),
@@ -118,10 +121,49 @@ function buildItinerary(places: PlaceData[], city: string) {
   }))
 }
 
+type ItineraryItem = ReturnType<typeof buildItinerary>[number]
+
+type TimetableEntry = {
+  id: string
+  city: string
+  day: string
+  time: string
+  title: string
+  tag: string
+  icon: IconName
+  citationHref?: string
+}
+
+function loadTimetable(): TimetableEntry[] {
+  try {
+    const raw = window.localStorage.getItem(TIMETABLE_STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as TimetableEntry[]) : []
+  } catch {
+    return []
+  }
+}
+
+function formatTimeLabel(time: string): string {
+  const [hours, minutes] = time.split(':').map(Number)
+  const date = new Date()
+  date.setHours(hours, minutes, 0, 0)
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date)
+}
+
+function groupTimetableByDay(entries: TimetableEntry[]): [string, TimetableEntry[]][] {
+  const byDay = new Map<string, TimetableEntry[]>()
+  for (const entry of entries) {
+    const existing = byDay.get(entry.day) ?? []
+    existing.push(entry)
+    byDay.set(entry.day, existing)
+  }
+  return Array.from(byDay.entries())
+    .sort(([dayA], [dayB]) => dayA.localeCompare(dayB))
+    .map(([day, dayEntries]) => [day, dayEntries.sort((a, b) => a.time.localeCompare(b.time))])
+}
+
 function getDefaultDate() {
-  const nextWeekend = new Date()
-  nextWeekend.setDate(nextWeekend.getDate() + 2)
-  return nextWeekend.toISOString().slice(0, 10)
+  return new Date().toISOString().slice(0, 10)
 }
 
 function tripDateList(startDate: string, days: number): string[] {
@@ -288,6 +330,127 @@ function LocationField({ city, onChange }: { city: string; onChange: (value: str
   )
 }
 
+function AddToTimetable({
+  item,
+  city,
+  tripDays,
+  timetable,
+  onAdd,
+  onRemove,
+}: {
+  item: ItineraryItem
+  city: string
+  tripDays: string[]
+  timetable: TimetableEntry[]
+  onAdd: (entry: TimetableEntry) => void
+  onRemove: (id: string, day: string) => void
+}) {
+  const [day, setDay] = useState(tripDays[0])
+  const [time, setTime] = useState(DEFAULT_TIME)
+
+  useEffect(() => {
+    if (!tripDays.includes(day)) setDay(tripDays[0])
+  }, [tripDays, day])
+
+  const added = timetable.some((entry) => entry.id === item.id && entry.day === day)
+
+  return (
+    <div className="add-to-timetable">
+      {tripDays.length > 1 && (
+        <select value={day} onChange={(event) => setDay(event.target.value)} aria-label={`Day to visit ${item.title}`}>
+          {tripDays.map((tripDay) => (
+            <option key={tripDay} value={tripDay}>{formatShortDate(tripDay)}</option>
+          ))}
+        </select>
+      )}
+      <input
+        type="time"
+        value={time}
+        onChange={(event) => setTime(event.target.value)}
+        aria-label={`Time to visit ${item.title}`}
+      />
+      {added ? (
+        <button type="button" className="added" onClick={() => onRemove(item.id, day)}>
+          <Icon name="close" size={12} /> Remove from timetable
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onAdd({
+            id: item.id,
+            city,
+            day,
+            time,
+            title: item.title,
+            tag: item.tag,
+            icon: item.icon,
+            citationHref: item.citations[0]?.href,
+          })}
+        >
+          <Icon name="plus" size={12} /> Add to timetable
+        </button>
+      )}
+    </div>
+  )
+}
+
+function TimetablePanel({
+  entries,
+  onClose,
+  onRemove,
+}: {
+  entries: TimetableEntry[]
+  onClose: () => void
+  onRemove: (id: string, day: string) => void
+}) {
+  const groups = groupTimetableByDay(entries)
+
+  return (
+    <div className="timetable-overlay" role="dialog" aria-modal="true" aria-label="Your timetable" onClick={onClose}>
+      <div className="timetable-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="timetable-header">
+          <h2>Your timetable</h2>
+          <button type="button" onClick={onClose} aria-label="Close timetable">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+        {groups.length === 0 ? (
+          <p className="timetable-empty">
+            You haven't added any places yet. Pick a time on any recommendation to start building your schedule.
+          </p>
+        ) : (
+          <div className="timetable-days">
+            {groups.map(([day, dayEntries]) => (
+              <div className="timetable-day" key={day}>
+                <h3>{formatShortDate(day)}</h3>
+                <ul>
+                  {dayEntries.map((entry) => (
+                    <li key={`${entry.id}-${entry.day}`}>
+                      <span className="timetable-time">{formatTimeLabel(entry.time)}</span>
+                      <span className="timetable-icon"><Icon name={entry.icon} size={15} /></span>
+                      <span className="timetable-title">
+                        {entry.title}
+                        <small>{entry.city}</small>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onRemove(entry.id, entry.day)}
+                        aria-label={`Remove ${entry.title} from timetable`}
+                      >
+                        <Icon name="close" size={12} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [screen, setScreen] = useState<'landing' | 'chat'>('landing')
   const [input, setInput] = useState('')
@@ -303,8 +466,25 @@ function App() {
   const [places, setPlaces] = useState<PlaceData[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [city, setCity] = useState('Seattle')
+  const [timetable, setTimetable] = useState<TimetableEntry[]>(loadTimetable)
+  const [showTimetable, setShowTimetable] = useState(false)
 
   const researchSteps = getResearchSteps(city)
+
+  useEffect(() => {
+    window.localStorage.setItem(TIMETABLE_STORAGE_KEY, JSON.stringify(timetable))
+  }, [timetable])
+
+  const addToTimetable = (entry: TimetableEntry) => {
+    setTimetable((current) => [
+      ...current.filter((existing) => !(existing.id === entry.id && existing.day === entry.day)),
+      entry,
+    ])
+  }
+
+  const removeFromTimetable = (id: string, day: string) => {
+    setTimetable((current) => current.filter((entry) => !(entry.id === id && entry.day === day)))
+  }
 
   useEffect(() => {
     if (screen !== 'landing' || input) return
@@ -385,9 +565,14 @@ function App() {
             <span className="brand-symbol"><Icon name="plane" size={19} /></span>
             Wander
           </button>
-          <button className="new-trip" onClick={() => setScreen('landing')} type="button">
-            <Icon name="plus" size={16} /> New trip
-          </button>
+          <div className="topbar-actions">
+            <button className="timetable-button" onClick={() => setShowTimetable(true)} type="button">
+              <Icon name="calendar" size={16} /> My Timetable{timetable.length > 0 ? ` · ${timetable.length}` : ''}
+            </button>
+            <button className="new-trip" onClick={() => setScreen('landing')} type="button">
+              <Icon name="plus" size={16} /> New trip
+            </button>
+          </div>
         </header>
 
         <div className="chat-shell">
@@ -451,8 +636,7 @@ function App() {
 
                   <div className="timeline">
                     {buildItinerary(places ?? [], city).map((item) => (
-                        <article className="recommendation" key={item.title}>
-                          <div className="time">{item.time}</div>
+                        <article className="recommendation" key={item.id}>
                           <div className="timeline-dot"><Icon name={item.icon} size={17} /></div>
                           <div className="recommendation-card">
                             <div className="card-heading">
@@ -475,6 +659,14 @@ function App() {
                                 ))}
                               </div>
                             </div>
+                            <AddToTimetable
+                              item={item}
+                              city={city}
+                              tripDays={tripDays}
+                              timetable={timetable}
+                              onAdd={addToTimetable}
+                              onRemove={removeFromTimetable}
+                            />
                           </div>
                         </article>
                     ))}
@@ -500,6 +692,13 @@ function App() {
             <span>Wander can make mistakes. Check linked sources before you go.</span>
           </div>
         </div>
+        {showTimetable && (
+          <TimetablePanel
+            entries={timetable}
+            onClose={() => setShowTimetable(false)}
+            onRemove={removeFromTimetable}
+          />
+        )}
       </main>
     )
   }
@@ -511,7 +710,12 @@ function App() {
           <span className="brand-symbol"><Icon name="plane" size={19} /></span>
           Wander
         </div>
-        <LocationField city={city} onChange={setCity} />
+        <div className="landing-nav-actions">
+          <button className="timetable-button" onClick={() => setShowTimetable(true)} type="button">
+            <Icon name="calendar" size={16} /> My Timetable{timetable.length > 0 ? ` · ${timetable.length}` : ''}
+          </button>
+          <LocationField city={city} onChange={setCity} />
+        </div>
       </header>
 
       <section className="hero-section">
@@ -550,6 +754,13 @@ function App() {
           </button>
         </div>
       </section>
+      {showTimetable && (
+        <TimetablePanel
+          entries={timetable}
+          onClose={() => setShowTimetable(false)}
+          onRemove={removeFromTimetable}
+        />
+      )}
     </main>
   )
 }
