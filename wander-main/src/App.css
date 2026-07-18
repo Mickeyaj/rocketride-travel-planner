@@ -794,8 +794,23 @@ button {
   line-height: 1.55;
 }
 
-.timeline {
+.timeline-groups {
   padding-top: 25px;
+}
+
+.timeline-group + .timeline-group {
+  margin-top: 8px;
+}
+
+.timeline-group-title {
+  margin: 0 0 2px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  color: #2d2822;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -.3px;
 }
 
 .recommendation {

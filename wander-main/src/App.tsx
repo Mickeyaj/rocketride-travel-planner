@@ -55,21 +55,49 @@ function getResearchSteps(city: string) {
 }
 
 const CATEGORY_KEYWORDS: [string[], string][] = [
-  [['restaurant', 'food', 'eat', 'dinner', 'lunch', 'breakfast', 'brunch'], 'restaurant'],
+  [
+    [
+      'restaurant', 'food', 'foodie', 'eat', 'eating', 'dine', 'dining',
+      'meal', 'hungry', 'snack', 'bite', 'cuisine',
+      'dinner', 'lunch', 'breakfast', 'brunch',
+    ],
+    'restaurant',
+  ],
   [['coffee', 'cafe'], 'cafe'],
   [['beach', 'beaches', 'coast', 'coastal', 'shore', 'shoreline', 'seaside'], 'beach'],
   // Nominatim has no dedicated "hiking trail" tag that reliably returns results, so
   // hiking-flavored queries route to 'park', which surfaces real matches in practice.
-  [['hike', 'hiking', 'trail', 'outdoor', 'nature'], 'park'],
+  [['hike', 'hiking', 'trail', 'outdoor', 'nature', 'park'], 'park'],
   [['museum', 'art', 'gallery', 'culture'], 'museum'],
+  [['attraction', 'sightseeing', 'sight', 'things to do'], 'attraction'],
 ]
 
-function categoryForQuery(text: string): string {
+const CATEGORY_LABELS: Record<string, string> = {
+  restaurant: 'Restaurants',
+  cafe: 'Cafes',
+  beach: 'Beaches',
+  park: 'Parks & Hikes',
+  museum: 'Museums',
+  attraction: 'Attractions',
+}
+
+function categoryLabel(category: string): string {
+  return CATEGORY_LABELS[category] ?? category.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+// Finds every category the query touches (e.g. "hiking places, parks, restaurants"
+// mentions two categories) instead of stopping at the first match, so a compound
+// request can be answered with one section per category.
+function categoriesForQuery(text: string): string[] {
   const lower = text.toLowerCase()
-  const match = CATEGORY_KEYWORDS.find(([keywords]) =>
-    keywords.some((keyword) => new RegExp(`\\b${keyword}\\b`).test(lower)),
-  )
-  return match ? match[1] : 'attraction'
+  const matches = CATEGORY_KEYWORDS
+    // "s?" tolerates simple plurals (restaurant/restaurants, park/parks) without
+    // having to list every plural form alongside its singular in the keyword lists.
+    .filter(([keywords]) => keywords.some((keyword) => new RegExp(`\\b${keyword}s?\\b`).test(lower)))
+    .map(([, category]) => category)
+
+  const unique = Array.from(new Set(matches))
+  return unique.length > 0 ? unique : ['attraction']
 }
 
 const MAX_RESULTS = 8
@@ -463,7 +491,7 @@ function App() {
   const [tripDate, setTripDate] = useState(getDefaultDate)
   const [duration, setDuration] = useState(2)
   const [forecast, setForecast] = useState<ForecastDay[] | null>(null)
-  const [places, setPlaces] = useState<PlaceData[] | null>(null)
+  const [placesByCategory, setPlacesByCategory] = useState<{ category: string; places: PlaceData[] }[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [city, setCity] = useState('Seattle')
   const [timetable, setTimetable] = useState<TimetableEntry[]>(loadTimetable)
@@ -520,8 +548,8 @@ function App() {
 
   useEffect(() => {
     if (screen !== 'chat' || showResults) return
-    if ((forecast && places) || loadError) setShowResults(true)
-  }, [screen, showResults, forecast, places, loadError])
+    if ((forecast && placesByCategory) || loadError) setShowResults(true)
+  }, [screen, showResults, forecast, placesByCategory, loadError])
 
   const startTrip = (event: FormEvent) => {
     event.preventDefault()
@@ -532,15 +560,32 @@ function App() {
     setStatusIndex(0)
     setShowResults(false)
     setForecast(null)
-    setPlaces(null)
+    setPlacesByCategory(null)
     setLoadError(null)
     setScreen('chat')
     window.scrollTo({ top: 0, behavior: 'smooth' })
 
-    Promise.all([fetchForecast(city), fetchPlaces(city, categoryForQuery(trimmedInput))])
-      .then(([forecastResult, placesResult]) => {
+    const categories = categoriesForQuery(trimmedInput)
+
+    Promise.all([
+      fetchForecast(city),
+      Promise.allSettled(categories.map((category) => fetchPlaces(city, category))),
+    ])
+      .then(([forecastResult, settledPlaces]) => {
+        const successful = categories
+          .map((category, index) => ({ category, result: settledPlaces[index] }))
+          .filter(
+            (entry): entry is { category: string; result: PromiseFulfilledResult<PlaceData[]> } =>
+              entry.result.status === 'fulfilled',
+          )
+          .map(({ category, result }) => ({ category, places: result.value }))
+
         setForecast(forecastResult)
-        setPlaces(placesResult)
+        setPlacesByCategory(successful)
+
+        if (successful.length === 0) {
+          setLoadError(`Couldn't find any places for "${trimmedInput}" in ${city}.`)
+        }
       })
       .catch((error: Error) => {
         setLoadError(error.message)
@@ -634,41 +679,50 @@ function App() {
                     </p>
                   </div>
 
-                  <div className="timeline">
-                    {buildItinerary(places ?? [], city).map((item) => (
-                        <article className="recommendation" key={item.id}>
-                          <div className="timeline-dot"><Icon name={item.icon} size={17} /></div>
-                          <div className="recommendation-card">
-                            <div className="card-heading">
-                              <h2>{item.title}</h2>
-                              <span>{item.tag}</span>
-                            </div>
-                            <p>{item.detail}</p>
-                            <div className="citations-panel">
-                              <div className="citations-label">
-                                <Icon name="external" size={12} />
-                                Verified sources
-                              </div>
-                              <div className="citation-links">
-                                {item.citations.map((citation, index) => (
-                                  <a href={citation.href} target="_blank" rel="noreferrer" key={citation.href}>
-                                    <span>{index + 1}</span>
-                                    {citation.label}
-                                    <Icon name="external" size={11} />
-                                  </a>
-                                ))}
-                              </div>
-                            </div>
-                            <AddToTimetable
-                              item={item}
-                              city={city}
-                              tripDays={tripDays}
-                              timetable={timetable}
-                              onAdd={addToTimetable}
-                              onRemove={removeFromTimetable}
-                            />
-                          </div>
-                        </article>
+                  <div className="timeline-groups">
+                    {(placesByCategory ?? []).map(({ category, places: categoryPlaces }) => (
+                      <section className="timeline-group" key={category}>
+                        {(placesByCategory?.length ?? 0) > 1 && (
+                          <h2 className="timeline-group-title">{categoryLabel(category)}</h2>
+                        )}
+                        <div className="timeline">
+                          {buildItinerary(categoryPlaces, city).map((item) => (
+                              <article className="recommendation" key={item.id}>
+                                <div className="timeline-dot"><Icon name={item.icon} size={17} /></div>
+                                <div className="recommendation-card">
+                                  <div className="card-heading">
+                                    <h2>{item.title}</h2>
+                                    <span>{item.tag}</span>
+                                  </div>
+                                  <p>{item.detail}</p>
+                                  <div className="citations-panel">
+                                    <div className="citations-label">
+                                      <Icon name="external" size={12} />
+                                      Verified sources
+                                    </div>
+                                    <div className="citation-links">
+                                      {item.citations.map((citation, index) => (
+                                        <a href={citation.href} target="_blank" rel="noreferrer" key={citation.href}>
+                                          <span>{index + 1}</span>
+                                          {citation.label}
+                                          <Icon name="external" size={11} />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <AddToTimetable
+                                    item={item}
+                                    city={city}
+                                    tripDays={tripDays}
+                                    timetable={timetable}
+                                    onAdd={addToTimetable}
+                                    onRemove={removeFromTimetable}
+                                  />
+                                </div>
+                              </article>
+                          ))}
+                        </div>
+                      </section>
                     ))}
                   </div>
                 </div>

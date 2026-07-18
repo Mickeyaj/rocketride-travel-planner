@@ -1,11 +1,19 @@
 # RocketRide Travel MCP
 
-An MCP server that gives an AI travel-planning agent live weather and places data, plus a small React frontend (Wander) for trying it out directly.
+**Wander** is an AI-powered travel planning app that turns a plain-language request — like *"find scenic hikes with a great lunch nearby"* — into a real, weather-aware itinerary. It's built on a custom [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, so the same weather and places data it serves to its React frontend is also directly usable by AI agents and pipelines.
+
+### Highlights
+
+- **Natural-language trip planning** — describe a trip in plain English and Wander parses it into the right search categories automatically, including compound requests like *"hiking places, parks, restaurants"*, which return as separate, clearly labeled result sections in one go.
+- **Broad intent matching for dining** — anything eating-related (*hungry*, *grab a bite*, *dining*, *cuisine*, *snack*, *brunch*, etc.) routes to restaurant results, not just the literal word "restaurant."
+- **Live, location-aware data** — real-time weather/forecast plus attractions, restaurants, cafes, museums, parks & hiking trails, and beaches, all pulled from live APIs (OpenWeatherMap + OpenStreetMap) with no results hardcoded.
+- **Personal itinerary builder** — pick any recommended place, choose the day and time you want to go, and build a custom "My Timetable" schedule that's saved locally and viewable anytime, across sessions.
+- **Dual-protocol architecture** — every tool (`getWeather`, `getWeatherForecast`, `getPlaces`) is exposed both as a plain REST API for the web app and as an MCP tool, so the exact same backend can power a human-facing UI and an autonomous AI agent (see the RocketRide CrewAI pipeline below).
 
 ## What's in here
 
 - **MCP server** ([server.js](server.js)) — exposes `getWeather`, `getWeatherForecast`, and `getPlaces` as MCP tools (via `/mcp`, streamable HTTP), and mirrors the same data as plain REST endpoints for the frontend.
-- **Wander** ([wander-main/](wander-main/)) — a Vite + React chat UI that calls the REST endpoints to build a day-by-day itinerary.
+- **Wander** ([wander-main/](wander-main/)) — a Vite + React chat UI that calls the REST endpoints to build a day-by-day itinerary, with natural-language category detection and a persistent personal timetable builder.
 - **RocketRide pipeline** ([travelpipeline.pipe](travelpipeline.pipe)) — a CrewAI travel agent that connects to this server's `/mcp` endpoint as a tool source (weather + places) to answer trip-planning questions. See `.rocketride/docs/` for RocketRide pipeline docs.
 
 ## Setup
@@ -67,7 +75,7 @@ Same three operations, exposed over MCP at `/mcp` for agents/pipelines (used by 
 - `park` — also the best category for hikes/trails; Nominatim has no dedicated "hiking trail" tag, but named parks and trail areas come back reliably under `park`
 - `beach` — coastal and beach spots (e.g. searching `beach` in Miami returns real named beaches like Hobie Island Beach)
 
-The Wander frontend maps natural-language phrases (e.g. "scenic hikes", "beach day") to the right category automatically — see `CATEGORY_KEYWORDS` in [wander-main/src/App.tsx](wander-main/src/App.tsx).
+The Wander frontend maps natural-language phrases to the right categories automatically — see `CATEGORY_KEYWORDS` and `categoriesForQuery` in [wander-main/src/App.tsx](wander-main/src/App.tsx). A single prompt can match more than one category at once (e.g. "hiking places, parks, restaurants" returns both a Parks & Hikes section and a Restaurants section), and dining intent is matched broadly — words like "hungry," "dining," "grab a bite," or "cuisine" all route to restaurants, not just the literal word "restaurant."
 
 Nominatim is a shared public service — keep request volume light and don't strip the `User-Agent` header set in `tools/places.js`.
 
