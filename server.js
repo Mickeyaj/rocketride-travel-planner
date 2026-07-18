@@ -73,7 +73,7 @@ server.tool(
 
 server.tool(
   "getPlaces",
-  "Get places of a given category (e.g. attraction, restaurant, cafe, museum, park) for a given city.",
+  "Get places of a given category (e.g. attraction, restaurant, cafe, museum, park, beach) for a given city. Use 'park' for hiking/trail spots and 'beach' for coastal/beach spots.",
   {
     city: z.string(),
     category: z.string().optional(),

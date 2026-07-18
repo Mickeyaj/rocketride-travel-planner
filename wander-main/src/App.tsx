@@ -56,6 +56,9 @@ function getResearchSteps(city: string) {
 const CATEGORY_KEYWORDS: [string[], string][] = [
   [['restaurant', 'food', 'eat', 'dinner', 'lunch', 'breakfast', 'brunch'], 'restaurant'],
   [['coffee', 'cafe'], 'cafe'],
+  [['beach', 'beaches', 'coast', 'coastal', 'shore', 'shoreline', 'seaside'], 'beach'],
+  // Nominatim has no dedicated "hiking trail" tag that reliably returns results, so
+  // hiking-flavored queries route to 'park', which surfaces real matches in practice.
   [['hike', 'hiking', 'trail', 'outdoor', 'nature'], 'park'],
   [['museum', 'art', 'gallery', 'culture'], 'museum'],
 ]
@@ -79,6 +82,7 @@ const PLACE_ICONS: Partial<Record<string, IconName>> = {
   monument: 'compass',
   castle: 'compass',
   park: 'compass',
+  beach: 'compass',
   cafe: 'coffee',
   restaurant: 'utensils',
   fast_food: 'utensils',
